@@ -47,15 +47,3 @@ O primeiro build baixa as imagens e as dependências. O catálogo local já incl
 
 Cada computador tem seu próprio banco, arquivos e contas locais. O estudo de caso institucional pode ser importado à parte com uma cópia autorizada. O [guia de desenvolvimento](Alimenta/marachef_mvp_funcional/marachef_mvp/LEIA_PRIMEIRO.md) explica a execução fora do Docker, os testes e os fluxos de aprovação.
 
-## Primeiro envio ao GitHub
-
-Crie um repositório privado vazio, sem gerar README pelo site, e convide os integrantes da equipe depois do push. Antes do commit, confira a lista de arquivos staged. O `.env`, as contas locais, os uploads e o estudo de caso institucional ficam fora do Git. [Publicar um projeto local](https://docs.github.com/en/migrations/importing-source-code/using-the-command-line-to-import-source-code/adding-locally-hosted-code-to-github)
-
-```sh
-git add .
-git diff --cached --name-only
-git commit -m "Prepara MaraChef para a demonstração do hackathon"
-git branch -M main
-git remote add origin "https://github.com/SEU-USUARIO/SEU-REPOSITORIO.git"
-git push -u origin main
-```
