@@ -1,0 +1,518 @@
+<!DOCTYPE html><html lang="pt-BR"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<meta content="web_dashboard" name="shell-type">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Outfit:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+    @layer base {
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        overscroll-behavior: none;
+        font-family: 'Inter', sans-serif;
+      }
+    }
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #E5D4CC;
+      border-radius: 4px;
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#9E3C1B",
+            "primary-dark": "#7E2505",
+            "primary-container": "#9E3C1B",
+            "on-primary": "#FFFFFF",
+            secondary: "#2F5D48",
+            "secondary-container": "#B9EBCF",
+            surface: "#F6EAE5",
+            "surface-card": "#FFF9F6",
+            "surface-sidebar": "#F1E5DF",
+            "surface-item": "#F8EBE7",
+            "outline-border": "#E5D4CC",
+            "on-surface": "#201A18",
+            "on-surface-variant": "#6E5B54"
+          },
+          fontFamily: {
+            sans: ["Inter", "sans-serif"],
+            outfit: ["Outfit", "sans-serif"],
+            inter: ["Inter", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-surface text-on-surface antialiased h-screen w-screen overflow-hidden flex">
+<!-- SIDEBAR FIXA ORIGINAL MARACHEF -->
+<aside class="w-64 h-full shrink-0 flex flex-col justify-between py-5 px-4 bg-surface-sidebar border-r border-outline-border z-30 select-none">
+<div class="flex flex-col gap-5">
+<div class="px-2 flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-outfit text-2xl font-bold tracking-tight text-on-surface">MaraChef</span>
+<span class="text-[11px] font-medium text-on-surface-variant uppercase tracking-wider">Cozinha de Bancada</span>
+</div>
+</div>
+<div class="h-px bg-outline-border"></div>
+<nav class="flex flex-col gap-1.5 font-inter text-[13px]">
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-item hover:text-on-surface transition-colors font-medium" href="#">
+<span class="material-symbols-outlined text-[18px] mr-2.5 opacity-70">home</span>
+          Início
+        </a>
+<a aria-current="page" class="flex items-center px-3 py-2 transition-colors bg-primary text-on-primary font-semibold rounded-lg shadow-sm" href="#">
+<span class="material-symbols-outlined text-[18px] mr-2.5">menu_book</span>
+          Biblioteca de Receitas
+        </a>
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-item hover:text-on-surface transition-colors font-medium" href="#">
+<span class="material-symbols-outlined text-[18px] mr-2.5 opacity-70">add_circle</span>
+          Registrar Preparo
+        </a>
+<a class="flex items-center px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-item hover:text-on-surface transition-colors font-medium" href="#">
+<span class="material-symbols-outlined text-[18px] mr-2.5 opacity-70">splitscreen</span>
+          Etapas Geradas
+        </a>
+<a class="flex items-center justify-between px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-item hover:text-on-surface transition-colors font-medium" href="#">
+<span class="flex items-center">
+<span class="material-symbols-outlined text-[18px] mr-2.5 opacity-70">fact_check</span>
+            Validações
+          </span>
+<span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-outline-border/60 text-on-surface-variant">Revisão</span>
+</a>
+</nav>
+</div>
+<!-- Perfil do Usuário na base da Sidebar -->
+<div class="flex flex-col gap-2 pt-3 border-t border-outline-border">
+<div class="flex items-center gap-2.5 px-1">
+<div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-white text-[18px]">person</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-outfit font-semibold text-[13px] text-on-surface truncate">Chef Executivo</span>
+<span class="text-[11px] text-on-surface-variant truncate">Cozinha Central • MaraChef</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- ÁREA PRINCIPAL FIXA (1440x900 viewport fit sem scroll global) -->
+<div class="flex-1 h-full flex flex-col min-w-0 bg-surface overflow-hidden">
+<!-- SUB-HEADER / BREADCRUMB -->
+<header class="h-11 shrink-0 px-6 bg-surface/90 backdrop-blur border-b border-outline-border flex items-center justify-between text-[12px]">
+<div class="flex items-center gap-2">
+<span class="font-outfit font-bold text-on-surface tracking-tight text-[13px]">MaraChef</span>
+<span class="text-on-surface-variant/40">•</span>
+<span class="uppercase tracking-widest text-[10px] font-semibold text-secondary">CONSULTA DE BANCADA</span>
+<span class="text-on-surface-variant/40">•</span>
+<span class="text-on-surface-variant font-medium">Biblioteca de Receitas</span>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-card border border-outline-border text-[11px]">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="">Sincronizado com Cozinha Marambaia</span>
+</div>
+<div class="flex items-center gap-1 text-[11px] text-on-surface font-medium">
+<span class="material-symbols-outlined text-[15px] text-secondary">verified_user</span>
+<span class="">Supervisão: Chef Helena Rios</span>
+</div>
+</div>
+</header>
+<!-- CONTEÚDO PRINCIPAL (DASHBOARD COMPLETO) -->
+<main class="flex-1 flex flex-col px-6 py-2.5 gap-2.5 min-h-0 overflow-hidden">
+<!-- BANNER HERO HORIZONTAL (Fidelidade IMAGE_4 / IMAGE_3) -->
+<div class="relative h-[118px] shrink-0 rounded-2xl overflow-hidden shadow-sm border border-outline-border group">
+
+<div class="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/30 flex flex-col justify-between p-3.5">
+<!-- Botão Voltar Topo Esquerdo -->
+<div>
+<a class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md text-[11px] font-medium transition-colors border border-white/15" href="#">
+<span class="material-symbols-outlined text-[14px]">arrow_back</span>
+              Voltar à biblioteca
+            </a>
+</div>
+<!-- Título e Badge -->
+<div class="flex items-end justify-between">
+<div>
+<h1 class="font-outfit text-2xl font-bold text-white tracking-tight leading-none drop-shadow-sm">Rabada Tradicional com Agrião</h1>
+<p class="text-white/80 text-[11px] mt-1 flex items-center gap-1.5 font-inter">
+<span class="">Receita Homologada pela Cozinha Central</span>
+<span class="text-white/40">•</span>
+<span class="">Ficha Operacional de Alta Precisão</span>
+</p>
+</div>
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/90 text-white font-inter text-[11px] font-medium backdrop-blur-md border border-white/20 shadow-sm">
+<span class="material-symbols-outlined text-[13px]">verified</span>
+              Receita Homologada • Chef Helena Rios
+            </span>
+</div>
+</div>
+</div>
+<!-- BARRA DE ABAS PILL (IMAGE_4) -->
+<div class="flex items-center justify-between shrink-0 h-9">
+<div class="flex items-center gap-2">
+<!-- Aba Ativa: Modo de Preparo -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-surface-card border border-primary text-primary font-inter font-semibold text-[12px] shadow-sm">
+<span class="material-symbols-outlined text-[16px]">menu_book</span>
+            Modo de Preparo
+          </button>
+<!-- Aba 2: Ingredientes -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-surface-card/60 hover:bg-surface-card border border-outline-border text-on-surface-variant hover:text-on-surface font-inter font-medium text-[12px] transition-colors">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">format_list_bulleted</span>
+            Ingredientes
+          </button>
+<!-- Aba 3: Ficha Técnica -->
+<button class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-surface-card/60 hover:bg-surface-card border border-outline-border text-on-surface-variant hover:text-on-surface font-inter font-medium text-[12px] transition-colors">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">assignment</span>
+            Ficha Técnica
+          </button>
+</div>
+<div class="flex items-center gap-3 text-[11px] text-on-surface-variant">
+<span class="">Tempo estimado de linha: <strong class="text-on-surface font-semibold">25 min</strong></span>
+<span class="text-outline-border">•</span>
+<span class="">5 Etapas documentadas</span>
+</div>
+</div>
+<!-- GRID PRINCIPAL DE 2 COLUNAS (Fiel à Imagem 4 com modificação Imagem 3) -->
+<div class="flex-1 grid grid-cols-12 gap-3 min-h-0 items-stretch">
+<!-- ==============================================
+             COLUNA ESQUERDA (65% -> col-span-7 ou 8)
+             Player de Vídeo + Info Cards
+        ================================================== -->
+<div class="col-span-7 flex flex-col gap-2 min-h-0 overflow-y-auto pr-0.5">
+<!-- CARD DO PLAYER DE VÍDEO -->
+<div class="bg-surface-card rounded-xl p-2.5 border border-outline-border shadow-sm flex flex-col gap-2 shrink-0">
+<!-- Topo do Player -->
+<div class="flex items-center justify-between px-0.5">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[17px]">smart_display</span>
+<span class="font-outfit font-semibold text-[13px] text-on-surface">Vídeo da Etapa Selecionada</span>
+<span class="text-[11px] text-on-surface-variant font-normal">— 04 • Verificação do ponto da carne</span>
+</div>
+<span class="text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded bg-surface-item text-primary border border-outline-border">
+                HD 60fps
+              </span>
+</div>
+<!-- Imagem e Tela do Player -->
+<div class="relative w-full h-[230px] rounded-lg overflow-hidden bg-black group select-none shadow-inner">
+<img alt="Vídeo demonstrativo da etapa 04 do preparo" class="w-full h-full object-cover brightness-[0.88] group-hover:scale-[1.01] transition-transform duration-500" src="https://lh3.googleusercontent.com/aida/AEtjO1XkUvMoQiD4lfCrcnT4_eBwRo2ZNOhDHfjq5CFgHDpc-_W3I5G7WS4d7WbsvIGjxn6yp6IC79CpVY48krAzk0GJE-SDL8oNkcapg2xF-L4BwuzfwkkDO3Y-bnDOMvyEqrfXFZRE5cASa9LJ7xeQBCwaJOppMf90Bbwg9h3eF3-vfjRWLSDUkZeiSG5Pgu8qwxKMziZ0wXB4SwS79fEx3edqE1fSrEeztiEzT38zj95H">
+<!-- Badges Superiores no Vídeo -->
+<div class="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+<span class="px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-white font-inter text-[10px] flex items-center gap-1.5 border border-white/10">
+<span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                  Etapa 04/05 • 00:48
+                </span>
+<span class="px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-white font-inter text-[10px] flex items-center gap-1 border border-white/10">
+<span class="material-symbols-outlined text-[12px] text-secondary-container">verified</span>
+                  Padrão de Bancada MaraChef
+                </span>
+</div>
+<!-- Botão Play Central Elegante -->
+<button aria-label="Reproduzir vídeo" class="absolute inset-0 m-auto w-12 h-12 rounded-full bg-white/90 hover:bg-white text-primary shadow-xl flex items-center justify-center transition-all hover:scale-105 backdrop-blur-sm">
+<span class="material-symbols-outlined text-[28px] translate-x-0.5 text-primary">play_arrow</span>
+</button>
+<!-- Legenda Inferior Overlay do Vídeo -->
+<div class="absolute bottom-10 left-3 pointer-events-none">
+<span class="bg-black/75 backdrop-blur-sm text-white/95 text-[10px] px-2 py-0.5 rounded font-medium border border-white/10">
+                  Vídeo demonstrativo: Etapa 4 - Verificação do Ponto da Carne (00:48)
+                </span>
+</div>
+<!-- Barra de Controles do Player -->
+<div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent flex flex-col gap-1">
+<!-- Barra de Progresso -->
+<div class="w-full h-1 bg-white/30 rounded-full overflow-hidden cursor-pointer">
+<div class="h-full bg-primary w-1/2 rounded-full relative">
+<span class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white shadow"></span>
+</div>
+</div>
+<!-- Botões de Controle Inferiores -->
+<div class="flex items-center justify-between text-white text-[11px] pt-0.5">
+<div class="flex items-center gap-3">
+<button class="hover:text-primary transition-colors flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-[15px]">play_arrow</span>
+                      Play / Pause
+                    </button>
+<button class="hover:text-primary transition-colors flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-[15px]">slow_motion_video</span>
+                      0.75x Lento
+                    </button>
+<button class="hover:text-primary transition-colors flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-[15px]">replay_10</span>
+                      Voltar 10s
+                    </button>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-white/80 font-mono text-[10px]">00:24 / 00:48</span>
+<button class="hover:text-primary transition-colors flex items-center">
+<span class="material-symbols-outlined text-[16px]">fullscreen</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- BLOCO: INGREDIENTES E REFERÊNCIAS TÉCNICAS (Cards Modulares) -->
+<div class="flex flex-col gap-2 shrink-0">
+<!-- 2 Cards Lado a Lado: Tempo de Fogo & Preparo em Linha -->
+<div class="grid grid-cols-2 gap-2">
+<div class="bg-surface-card rounded-xl p-2.5 border border-outline-border shadow-sm flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-item flex items-center justify-center text-primary shrink-0">
+<span class="material-symbols-outlined text-[18px]">timer</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">TEMPO DE FOGO</span>
+<span class="font-outfit font-bold text-[13px] text-on-surface leading-tight">25 min no total</span>
+</div>
+</div>
+<div class="bg-surface-card rounded-xl p-2.5 border border-outline-border shadow-sm flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-item flex items-center justify-center text-secondary shrink-0">
+<span class="material-symbols-outlined text-[18px]">restaurant</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">PREPARO EM LINHA</span>
+<span class="font-outfit font-bold text-[13px] text-on-surface leading-tight">Feito sob demanda</span>
+</div>
+</div>
+</div>
+<!-- Card Ingredientes Documentados da Etapa -->
+<div class="bg-surface-card rounded-xl p-2.5 border border-outline-border shadow-sm flex flex-col gap-1.5">
+<div class="flex items-center justify-between border-b border-outline-border/60 pb-1">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-[16px]">inventory_2</span>
+<span class="font-outfit font-bold text-[12px] text-on-surface uppercase tracking-wide">Ingredientes Documentados da Etapa</span>
+</div>
+<span class="text-[10px] text-on-surface-variant">Quantidades na ficha oficial</span>
+</div>
+<div class="grid grid-cols-3 gap-2 text-[11px] pt-0.5">
+<div class="flex items-center gap-1.5 bg-surface-item/60 p-1.5 rounded-lg border border-outline-border/40">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+<div class="flex flex-col truncate">
+<span class="font-semibold text-on-surface truncate">Rabada bovina</span>
+<span class="text-[10px] text-on-surface-variant truncate">Corte em juntas</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 bg-surface-item/60 p-1.5 rounded-lg border border-outline-border/40">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+<div class="flex flex-col truncate">
+<span class="font-semibold text-on-surface truncate">Cebola amarela</span>
+<span class="text-[10px] text-on-surface-variant truncate">Brunoise fina</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 bg-surface-item/60 p-1.5 rounded-lg border border-outline-border/40">
+<span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+<div class="flex flex-col truncate">
+<span class="font-semibold text-on-surface truncate">Agrião fresco</span>
+<span class="text-[10px] text-on-surface-variant truncate">Folhas crocantes</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card Dica da Chef Helena Rios (IMAGE_4 layout) -->
+<div class="bg-surface-card rounded-xl p-2.5 border border-outline-border shadow-sm flex flex-col gap-1">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[16px]">local_fire_department</span>
+<span class="font-outfit font-bold text-[12px] text-on-surface">Dica da Chef Helena Rios</span>
+</div>
+<span class="text-[10px] text-on-surface-variant">Segredo da Cozinha Marambaia</span>
+</div>
+<p class="text-[11px] text-on-surface leading-snug italic bg-surface-item/40 p-2 rounded-lg border-l-2 border-primary">
+                “Observe a textura e a maciez da carne conforme demonstrado no vídeo. Utilize este trecho como referência para identificar o ponto correto antes de prosseguir com a montagem final.”
+              </p>
+</div>
+</div>
+</div>
+<!-- ==============================================
+             COLUNA DIREITA (35% -> col-span-5)
+             PARTE DE CIMA: CHAT PARA PERGUNTAS (Assistente MaraChef)
+             PARTE DE BAIXO: VÍDEOS QUE IRÃO PASSAR A SEGUIR (Etapas)
+             (Conforme Anotação Vermelha IMAGE_3)
+        ================================================== -->
+<div class="col-span-5 flex flex-col gap-2 min-h-0 h-full overflow-hidden">
+<!-- ==========================================
+               PARTE DE CIMA: CHAT PARA PERGUNTAS (Assistente MaraChef)
+          ============================================== -->
+<div class="flex-[1.1] flex flex-col bg-surface-card rounded-xl border border-outline-border shadow-sm p-2.5 min-h-0 overflow-hidden">
+<!-- Cabeçalho do Chat -->
+<div class="flex items-center justify-between pb-2 border-b border-outline-border shrink-0">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[16px]">smart_toy</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-outfit font-bold text-[13px] text-on-surface leading-none">Assistente MaraChef</span>
+<span class="text-[10px] text-on-surface-variant truncate mt-0.5">Conhecimento validado pela Chef Helena Rios</span>
+</div>
+</div>
+<div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container/50 border border-secondary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+<span class="text-[10px] font-semibold text-secondary">IA Ativa</span>
+</div>
+</div>
+<!-- Corpo de Mensagens (Scroll suave interno) -->
+<div class="flex-1 overflow-y-auto py-2 space-y-2 pr-1 min-h-0 text-[11px]">
+<!-- Balão Funcionário -->
+<div class="flex justify-end">
+<div class="bg-surface-sidebar text-on-surface rounded-xl rounded-tr-none px-2.5 py-1.5 max-w-[85%] border border-outline-border shadow-2xs">
+                  Como sei que a carne chegou ao ponto correto?
+                </div>
+</div>
+<!-- Balão Assistente MaraChef AI -->
+<div class="flex flex-col gap-1.5 items-start">
+<div class="bg-surface-item/70 text-on-surface rounded-xl rounded-tl-none p-2.5 max-w-[96%] border border-outline-border shadow-2xs space-y-2">
+<p class="leading-relaxed">
+                    Segundo a referência aprovada pela <strong class="text-primary font-semibold">Chef Helena Rios</strong>, observe a textura e a maciez da carne demonstradas no vídeo. Compare com o ponto apresentado antes de prosseguir.
+                  </p>
+<!-- Bloco de Referência Clicável Conectado ao Vídeo -->
+<div class="bg-white rounded-lg p-2 border border-primary/25 flex flex-col gap-1.5 shadow-2xs">
+<div class="flex items-center justify-between text-[10px]">
+<span class="font-semibold text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">play_circle</span>
+                        Fonte: Etapa 04 • 00:48
+                      </span>
+<span class="font-mono text-on-surface-variant text-[9px]">Trecho 00:24</span>
+</div>
+<button class="w-full py-1 px-2 rounded-md bg-primary hover:bg-primary-dark text-white font-medium text-[10px] flex items-center justify-center gap-1 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[13px]">replay</span>
+                      Assistir ao trecho correspondente
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Perguntas Rápidas (Pills) -->
+<div class="py-1 flex items-center gap-1 overflow-x-auto shrink-0 border-t border-outline-border/60">
+<button class="px-2 py-0.5 rounded-full bg-surface-item hover:bg-outline-border text-on-surface-variant hover:text-on-surface text-[10px] whitespace-nowrap transition-colors shrink-0">
+                Ponto da carne?
+              </button>
+<button class="px-2 py-0.5 rounded-full bg-surface-item hover:bg-outline-border text-on-surface-variant hover:text-on-surface text-[10px] whitespace-nowrap transition-colors shrink-0">
+                Sequência dos temperos?
+              </button>
+<button class="px-2 py-0.5 rounded-full bg-surface-item hover:bg-outline-border text-on-surface-variant hover:text-on-surface text-[10px] whitespace-nowrap transition-colors shrink-0">
+                O que observar nesta etapa?
+              </button>
+</div>
+<!-- Campo de Envio -->
+<div class="pt-1 flex flex-col gap-1 shrink-0">
+<div class="relative flex items-center">
+<input class="w-full rounded-lg bg-white border border-outline-border pl-2.5 pr-8 py-1.5 text-[11px] text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Pergunte sobre esta receita..." type="text">
+<button aria-label="Enviar pergunta" class="absolute right-1 w-6 h-6 rounded bg-primary text-white flex items-center justify-center hover:bg-primary-dark transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+</button>
+</div>
+<span class="text-[9px] text-on-surface-variant/70 text-center">Respostas baseadas no conhecimento documentado e aprovado.</span>
+</div>
+</div>
+<!-- ==========================================
+               PARTE DE BAIXO: VÍDEOS QUE IRÃO PASSAR A SEGUIR
+               (Outras etapas de preparo - Conforme IMAGE_3 / IMAGE_4)
+          ============================================== -->
+<div class="flex-[0.9] flex flex-col bg-surface-card rounded-xl border border-outline-border shadow-sm p-2.5 min-h-0 overflow-hidden">
+<!-- Cabeçalho da Lista de Etapas -->
+<div class="flex items-center justify-between pb-1.5 border-b border-outline-border shrink-0">
+<div class="flex items-center gap-1.5">
+<span class="font-outfit font-bold text-[12px] text-on-surface">Etapas de Preparo (5 passos)</span>
+</div>
+<span class="text-[10px] text-on-surface-variant font-medium">Toque para ver o vídeo da etapa</span>
+</div>
+<!-- Lista de Etapas (Scrollável) -->
+<div class="flex-1 overflow-y-auto py-1 space-y-1.5 pr-1 min-h-0">
+<!-- Etapa 1 -->
+<div class="group flex items-center justify-between p-1.5 rounded-lg bg-surface-card border border-outline-border hover:border-primary/50 transition-colors">
+<div class="flex items-start gap-2 min-w-0">
+<span class="w-5 h-5 rounded-full bg-surface-item font-outfit font-bold text-[11px] text-on-surface flex items-center justify-center shrink-0 mt-0.5">1</span>
+<div class="flex flex-col min-w-0">
+<span class="font-outfit font-bold text-[11px] text-on-surface truncate group-hover:text-primary transition-colors">Aquecimento do Caldo</span>
+<span class="text-[10px] text-on-surface-variant truncate">Manter o caldo artesanal de ervas em fogo brando...</span>
+</div>
+</div>
+<button class="shrink-0 ml-2 px-2 py-0.5 rounded bg-surface-item hover:bg-outline-border text-on-surface font-inter text-[10px] font-semibold flex items-center gap-1 transition-colors border border-outline-border/60">
+<span class="material-symbols-outlined text-[12px] text-primary">play_arrow</span>
+                  Vídeo (02:35)
+                </button>
+</div>
+<!-- Etapa 2 -->
+<div class="group flex items-center justify-between p-1.5 rounded-lg bg-surface-card border border-outline-border hover:border-primary/50 transition-colors">
+<div class="flex items-start gap-2 min-w-0">
+<span class="w-5 h-5 rounded-full bg-surface-item font-outfit font-bold text-[11px] text-on-surface flex items-center justify-center shrink-0 mt-0.5">2</span>
+<div class="flex flex-col min-w-0">
+<span class="font-outfit font-bold text-[11px] text-on-surface truncate group-hover:text-primary transition-colors">O Ponto da Carne / Selagem</span>
+<span class="text-[10px] text-on-surface-variant truncate">Em uma panela larga, refogue e sele a carne até dourar...</span>
+</div>
+</div>
+<button class="shrink-0 ml-2 px-2 py-0.5 rounded bg-surface-item hover:bg-outline-border text-on-surface font-inter text-[10px] font-semibold flex items-center gap-1 transition-colors border border-outline-border/60">
+<span class="material-symbols-outlined text-[12px] text-primary">play_arrow</span>
+                  Vídeo (01:45)
+                </button>
+</div>
+<!-- Etapa 3 -->
+<div class="group flex items-center justify-between p-1.5 rounded-lg bg-surface-card border border-outline-border hover:border-primary/50 transition-colors">
+<div class="flex items-start gap-2 min-w-0">
+<span class="w-5 h-5 rounded-full bg-surface-item font-outfit font-bold text-[11px] text-on-surface flex items-center justify-center shrink-0 mt-0.5">3</span>
+<div class="flex flex-col min-w-0">
+<span class="font-outfit font-bold text-[11px] text-on-surface truncate group-hover:text-primary transition-colors">Adição Gradual e Cozimento</span>
+<span class="text-[10px] text-on-surface-variant truncate">Adicione o caldo quente aos poucos e deixe apurar...</span>
+</div>
+</div>
+<button class="shrink-0 ml-2 px-2 py-0.5 rounded bg-surface-item hover:bg-outline-border text-on-surface font-inter text-[10px] font-semibold flex items-center gap-1 transition-colors border border-outline-border/60">
+<span class="material-symbols-outlined text-[12px] text-primary">play_arrow</span>
+                  Vídeo (02:10)
+                </button>
+</div>
+<!-- Etapa 4 (ATIVA NO PLAYER) -->
+<div class="group flex items-center justify-between p-1.5 rounded-lg bg-primary/10 border-2 border-primary shadow-xs">
+<div class="flex items-start gap-2 min-w-0">
+<span class="w-5 h-5 rounded-full bg-primary font-outfit font-bold text-[11px] text-white flex items-center justify-center shrink-0 mt-0.5">4</span>
+<div class="flex flex-col min-w-0">
+<span class="font-outfit font-bold text-[11px] text-primary truncate">Verificação do Ponto da Carne</span>
+<span class="text-[10px] text-on-surface font-medium truncate">Avaliando maciez e textura para o padrão homologado</span>
+</div>
+</div>
+<span class="shrink-0 ml-2 px-2 py-0.5 rounded bg-primary text-white font-inter text-[10px] font-bold flex items-center gap-1 shadow-xs">
+<span class="material-symbols-outlined text-[12px]">pause</span>
+                  Reproduzindo
+                </span>
+</div>
+<!-- Etapa 5 -->
+<div class="group flex items-center justify-between p-1.5 rounded-lg bg-surface-card border border-outline-border hover:border-primary/50 transition-colors">
+<div class="flex items-start gap-2 min-w-0">
+<span class="w-5 h-5 rounded-full bg-surface-item font-outfit font-bold text-[11px] text-on-surface flex items-center justify-center shrink-0 mt-0.5">5</span>
+<div class="flex flex-col min-w-0">
+<span class="font-outfit font-bold text-[11px] text-on-surface truncate group-hover:text-primary transition-colors">Finalização Nobre</span>
+<span class="text-[10px] text-on-surface-variant truncate">Desligue o fogo, misture os temperos e finalize com agrião...</span>
+</div>
+</div>
+<button class="shrink-0 ml-2 px-2 py-0.5 rounded bg-surface-item hover:bg-outline-border text-on-surface font-inter text-[10px] font-semibold flex items-center gap-1 transition-colors border border-outline-border/60">
+<span class="material-symbols-outlined text-[12px] text-primary">play_arrow</span>
+                  Vídeo (01:10)
+                </button>
+</div>
+</div>
+<!-- Botão de Ação Concluir Preparo (IMAGE_4) -->
+<div class="pt-1.5 border-t border-outline-border/70 shrink-0">
+<button class="w-full py-1.5 rounded-lg bg-secondary hover:bg-secondary/90 text-white font-inter font-semibold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-colors">
+<span class="material-symbols-outlined text-[16px]">task_alt</span>
+                Concluir Preparo
+              </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+
+</body></html>

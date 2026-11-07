@@ -1,0 +1,47 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: marachef
+      POSTGRES_USER: marachef
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD no .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - marachef-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "marachef", "-d", "marachef"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: marachef
+      PGUSER: marachef
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Configure POSTGRES_PASSWORD no .env}
+      MARACHEF_SESSION_SECRET: ${MARACHEF_SESSION_SECRET:-}
+      MARACHEF_HTTPS_ONLY: ${MARACHEF_HTTPS_ONLY:-false}
+      MARACHEF_USERS_FILE: /app/data/accounts.json
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    volumes:
+      - marachef-files:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/biblioteca', timeout=3).close()"]
+      interval: 5s
+      timeout: 4s
+      start_period: 20s
+      retries: 12
+
+volumes:
+  marachef-db:
+  marachef-files:
