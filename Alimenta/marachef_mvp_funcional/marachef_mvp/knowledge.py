@@ -16,6 +16,7 @@ import store
 
 PDF_LIMIT = 25 * 1024**2
 VIDEO_LIMIT = 200 * 1024**2
+PHOTO_LIMIT = 5 * 1024**2
 DEMO_DIGEST = "4cff66ad5099eb596e2d1f47b926dad9e7ff126705e56619c01d4fdbfa202cc5"
 CASE_DIGEST = "a544e5bc29d2f5208de85dd3ad7b5c90016abd639608d893989983a1e968c193"
 DEMO_TITLE = "Receitas para Iniciantes: Virada Paulista, Costela e Buxada"
@@ -80,6 +81,36 @@ def save_file(stream, suffix, limit):
         path.unlink(missing_ok=True)
         raise
     return path, digest.hexdigest()
+
+
+def prepare_cover_photo(stream):
+    data = stream.read(PHOTO_LIMIT + 1)
+    if len(data) > PHOTO_LIMIT:
+        raise HTTPException(413, "Envie uma foto de até 5 MB.")
+    if data.startswith(b"\xff\xd8\xff"):
+        demuxer = "jpeg_pipe"
+    elif data.startswith(b"\x89PNG\r\n\x1a\n"):
+        demuxer = "png_pipe"
+    elif data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        demuxer = "webp_pipe"
+    else:
+        raise HTTPException(422, "Envie uma foto em JPG, PNG ou WebP.")
+
+    try:
+        result = subprocess.run(
+            [media_tool("ffmpeg"), "-nostdin", "-v", "error", "-xerror", "-protocol_whitelist", "pipe",
+             "-max_pixels", "50000000", "-f", demuxer, "-i", "pipe:0", "-frames:v", "1",
+             "-vf", "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease",
+             "-c:v", "mjpeg", "-q:v", "4", "-f", "image2pipe", "pipe:1"],
+            input=data, capture_output=True, check=True, timeout=15,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(503, "Instale o FFmpeg no servidor para receber fotos.") from exc
+    except subprocess.SubprocessError as exc:
+        raise HTTPException(422, "Não foi possível abrir a foto. Confira se o arquivo é válido.") from exc
+    if not result.stdout:
+        raise HTTPException(422, "Não foi possível abrir a foto. Confira se o arquivo é válido.")
+    return result.stdout
 
 
 def video_duration(path, demuxer):

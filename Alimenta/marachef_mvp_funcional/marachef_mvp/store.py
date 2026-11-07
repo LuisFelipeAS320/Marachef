@@ -114,6 +114,7 @@ def recipe_catalog(db, dish_id=None):
     return db.execute(f"""
         SELECT * FROM (
             SELECT DISTINCT ON (d.id) d.id, d.name, d.aliases, s.scope, s.kind, s.id AS source_id,
+                   d.cover_photo IS NOT NULL AS has_photo,
                    r.data->>'summary' AS summary,
                    jsonb_array_length(r.data->'stages') AS stage_count,
                    s.details->'duration' AS duration
@@ -123,6 +124,15 @@ def recipe_catalog(db, dish_id=None):
             ORDER BY d.id, (s.scope = 'oficial') DESC, (s.kind = 'video') DESC, r.created_at DESC, s.id
         ) recipes ORDER BY name
     """, {"id": dish_id}).fetchall()
+
+
+def recipe_photo(db, dish_id):
+    return db.execute(f"""
+        SELECT d.cover_photo FROM dishes d JOIN sources s ON s.dish_id = d.id
+        {RECIPE_SOURCES}
+        AND d.id = %s AND d.cover_photo IS NOT NULL
+        LIMIT 1
+    """, (dish_id,)).fetchone()
 
 
 def recipe_materials(db, dish_id, scope):

@@ -1,6 +1,7 @@
 "use strict";
 
 const recipeUrl = id => `/receita?prato=${encodeURIComponent(id)}`;
+const recipePhotoUrl = id => `/api/receitas/${encodeURIComponent(id)}/foto`;
 const searchKey = value => value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase("pt-BR");
 
 async function renderLibrary() {
@@ -18,9 +19,8 @@ async function renderLibrary() {
       <li data-recipe-card>
         <a class="recipe-card" href="${recipeUrl(recipe.id)}">
           <div class="recipe-cover" data-cover="${index % 4}" aria-hidden="true">
-            <span class="recipe-cover-icon">${icon(recipe.kind === "video" ? "play" : "book")}</span>
-            ${recipe.kind === "video" ? `<video data-preview="/midia/${escapeHtml(recipe.source_id)}#t=1"
-              muted playsinline preload="none" tabindex="-1"></video>` : ""}
+            <span class="recipe-cover-icon">${icon("dish")}</span>
+            ${recipe.has_photo ? `<img src="${recipePhotoUrl(recipe.id)}" alt="" loading="lazy">` : ""}
           </div>
           <div class="recipe-card-body">
             <span class="recipe-tag">${recipe.scope === "demo" ? "Demonstração" : "Receita publicada"}</span>
@@ -41,18 +41,10 @@ async function renderLibrary() {
     cards.forEach((card, index) => { card.hidden = !keys[index].includes(query); });
     document.querySelector("#recipe-empty").hidden = cards.some(card => !card.hidden);
   };
-  // Preview only recordings the learner scrolls into view.
-  if ("IntersectionObserver" in window) {
-    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      const video = entry.target;
-      video.onloadeddata = () => { video.classList.add("preview-ready"); };
-      video.preload = "metadata";
-      video.src = video.dataset.preview;
-      observer.unobserve(video);
-    }));
-    main.querySelectorAll("[data-preview]").forEach(video => observer.observe(video));
-  }
+  main.querySelectorAll(".recipe-cover img").forEach(image => {
+    image.addEventListener("error", () => image.remove(), {once: true});
+    if (image.complete && !image.naturalWidth) image.remove();
+  });
 }
 
 function recipePdfLink(document, page = document.chunks[0]?.page) {
@@ -122,6 +114,14 @@ async function renderRecipe() {
         <span class="recipe-tag">${recipe.scope === "demo" ? "Receita de demonstração" : "Receita publicada"}</span>
       </div>
     </header>
+    ${reviewer() ? `<details class="card recipe-photo-edit">
+      <summary id="recipe-photo-label">${recipe.has_photo ? "Trocar foto do prato" : "Adicionar foto do prato"}</summary>
+      <p class="muted">A foto aparece no cartão da biblioteca. Use JPG, PNG ou WebP de até 5 MB.</p>
+      <form id="recipe-photo"><fieldset>
+        <label>Foto do prato <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+        <button>Salvar foto</button>
+      </fieldset><p role="status"></p></form>
+    </details>` : ""}
     <div class="recipe-toolbar">
       <div class="recipe-tabs" role="group" aria-label="Seções da receita">
         <button data-recipe-tab="preparo" aria-pressed="true">${icon("play")} Modo de preparo</button>
@@ -187,6 +187,13 @@ async function renderRecipe() {
         </section>` : ""}
       </div>
     </div>`;
+  bindForm("recipe-photo", async (fields, report) => {
+    if (fields.get("photo").size > 5 * 1024 ** 2) throw new Error("Envie uma foto de até 5 MB.");
+    await post(recipePhotoUrl(id), fields);
+    document.getElementById("recipe-photo").reset();
+    document.getElementById("recipe-photo-label").textContent = "Trocar foto do prato";
+    status(report, "Foto salva na biblioteca.");
+  }, "Salvando foto…");
   const sections = [...main.querySelectorAll("[data-recipe-panel]")];
   const tabs = [...main.querySelectorAll("[data-recipe-tab]")];
   const show = tab => {

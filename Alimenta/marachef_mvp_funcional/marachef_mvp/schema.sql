@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS dishes (
     aliases text[] NOT NULL DEFAULT '{}'
 );
 
+ALTER TABLE dishes ADD COLUMN IF NOT EXISTS cover_photo bytea;
+
 CREATE TABLE IF NOT EXISTS sources (
     id uuid PRIMARY KEY,
     dish_id uuid REFERENCES dishes,
