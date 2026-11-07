@@ -69,7 +69,7 @@ function bindForm(id, handler, busyText = "Salvando…") {
 
 function renderLogin() {
   main.innerHTML = `
-    <div class="card compact">
+    <div class="card compact login-card">
       <p class="eyebrow">Cozinha Marambaia</p><h1>Entre na MaraChef</h1>
       <p class="muted">Acesse os preparos e orientações da sua equipe.</p>
       <form id="login"><fieldset>
@@ -86,7 +86,9 @@ function renderLogin() {
 
 async function renderHome() {
   const items = await api("/api/sources");
-  const recent = items.filter(item => item.kind === "video").slice(0, 3);
+  const videos = items.filter(item => item.kind === "video");
+  const recent = videos.slice(0, 3);
+  const older = videos.slice(3);
   main.innerHTML = `
     <header class="page-heading">
       <p class="eyebrow">Acervo &amp; memória culinária</p>
@@ -101,7 +103,10 @@ async function renderHome() {
     <section class="home-recent">
       <div class="section-heading"><div><p class="nav-caption">Últimos registros</p><h2>Preparos recentes</h2></div>
         <a href="/biblioteca">Ver acervo completo ${icon("arrow")}</a></div>
-      <div class="card">${sourceList(recent, "etapas", "Os preparos enviados aparecerão aqui.")}</div>
+      <div class="card">${sourceList(recent, "registro", "Os preparos enviados aparecerão aqui.")}
+        ${older.length ? `<details><summary>Ver preparos anteriores</summary>
+          ${sourceList(older, "registro")}</details>` : ""}
+      </div>
     </section>
     <section class="home-workflow">
       <h2 class="nav-caption">Metodologia operacional · Como funciona a MaraChef</h2>
@@ -152,7 +157,7 @@ async function renderRegister() {
         </section>
         <section class="card next-step">
           <div><p class="eyebrow">Etapa seguinte</p><h2>Análise do preparo</h2>
-            <p class="muted">Depois do envio, você pode analisar o vídeo com a MaraChef.</p></div>
+            <p class="muted">A análise com o Gemini começa automaticamente após o envio.</p></div>
           <button>Enviar vídeo ${icon("arrow")}</button>
         </section>
         <p role="status"></p>
@@ -207,7 +212,18 @@ async function renderRegister() {
       throw new Error("Selecione um vídeo de até 200 MB.");
     }
     const source = await post("/api/upload", fields);
-    location.assign(`/etapas?fonte=${source.id}`);
+    const url = `/registro?fonte=${encodeURIComponent(source.id)}`;
+    history.replaceState(null, "", url);
+    main.innerHTML = '<p role="status">Vídeo enviado. Abrindo o preparo…</p>';
+    window.scrollTo(0, 0);
+    try {
+      await renderSource(source.id);
+    } catch (error) {
+      main.innerHTML = `<h1>Vídeo enviado</h1><p class="error">${escapeHtml(error.message)}</p>
+        <a class="button" href="${url}">Abrir preparo</a>`;
+      return;
+    }
+    document.getElementById("analyze")?.requestSubmit();
   }, "Enviando vídeo…");
   bindForm("pdf-upload", async fields => {
     const source = await post("/api/documents", fields);
@@ -233,34 +249,27 @@ function sourceList(items, route, empty) {
   }).join("")}</ul>`;
 }
 
-async function renderStages() {
-  const items = await api("/api/sources");
-  const videos = items.filter(item => item.kind === "video");
-  const sheets = items.filter(item => item.kind === "documento" && item.scope === "oficial");
-  main.innerHTML = `<header class="page-heading"><h1>Etapas Geradas</h1></header>
-    <section class="card" aria-labelledby="stage-videos">
-      <h2 id="stage-videos" class="panel-heading">Vídeos de preparo</h2>
-      ${sourceList(videos, "etapas", "Nenhum vídeo registrado.")}
-    </section>
-    <section class="card" aria-labelledby="stage-sheets">
-      <h2 id="stage-sheets" class="panel-heading">Fichas técnicas</h2>
-      ${sourceList(sheets, "etapas", "Nenhuma ficha técnica disponível.")}
-    </section>`;
-}
-
 async function renderQueue() {
   if (!reviewer()) {
     main.innerHTML = "<h1>Validações</h1><p>Esta tela é reservada aos chefs e administradores.</p>";
     return;
   }
   const items = await api("/api/sources");
+  const pending = items.filter(item => item.status === "pendente");
+  const groups = [
+    ["video", "Vídeos de preparo"],
+    ["documento", "Fichas técnicas"],
+    ["comentario", "Observações"],
+  ].map(([kind, title]) => ({title, entries: pending.filter(item => item.kind === kind)}))
+    .filter(group => group.entries.length);
   main.innerHTML = `<header class="page-heading"><p class="eyebrow">Validação do chef</p>
     <h1>Revise o conhecimento antes de preservá-lo.</h1>
     <p class="muted">Confira os registros da equipe antes de publicar no acervo.</p></header>
     <section class="card"><h2>Aguardando revisão</h2>
-    ${sourceList(items.filter(item => item.status === "pendente"), "revisao", "Nenhuma fonte pendente.")}</section>
+    ${groups.length ? groups.map(({title, entries}) => `<h3 class="panel-heading">${title}</h3>
+      ${sourceList(entries, "revisao")}`).join("") : '<p class="muted">Nenhuma fonte pendente.</p>'}</section>
     <section class="card"><h2>Vídeos aguardando análise</h2>
-    ${sourceList(items.filter(item => !item.status), "etapas", "Nenhum vídeo aguardando análise.")}</section>
+    ${sourceList(items.filter(item => item.kind === "video" && !item.status), "registro", "Nenhum vídeo aguardando análise.")}</section>
     <section class="card"><h2>Histórico de decisões</h2>
     ${sourceList(items.filter(item => ["rejeitado", "aprovado"].includes(item.status)), "revisao", "Nenhuma decisão registrada.")}</section>`;
 }
@@ -348,7 +357,7 @@ async function renderSource(id) {
   const revision = screen === "biblioteca" ? active ?? draft : draft;
   const editable = reviewer() && screen !== "biblioteca" && revision?.status === "pendente";
   const video = source.kind === "video";
-  const heading = video && screen === "etapas" && revision ? "Seu preparo foi organizado." : source.dish || sourceTitle(source);
+  const heading = source.dish || sourceTitle(source);
   const metadata = [...new Set([source.dish, source.details.cook, labels[revision?.status]])]
     .filter(item => item && item !== heading);
   main.innerHTML = `<header class="page-heading"><p class="eyebrow">${labels[source.kind]} · ${labels[source.scope]}</p>
@@ -378,7 +387,7 @@ async function renderSource(id) {
           <button class="secondary" name="decision" value="salvar">Salvar rascunho</button>
           <button class="secondary" name="decision" value="rejeitar" formnovalidate>Rejeitar</button>
         </div>` : ""}
-      </fieldset><p role="status"></p></form></section>` : '<section class="card"><h2>Etapas do preparo</h2><p class="muted">O vídeo está pronto para ser analisado.</p></section>'}
+      </fieldset><p role="status"></p></form></section>` : '<section class="card"><h2>Etapas do preparo</h2><p class="muted">As etapas aparecerão aqui depois da análise.</p></section>'}
     </div>
     ${active && video ? `<section class="card"><h2>Enviar observação</h2><p>A observação será enviada ao chef para validação.</p>
       <form id="comment"><fieldset><label>Etapa <select name="stage">
@@ -497,6 +506,10 @@ async function renderChat() {
 }
 
 async function init() {
+  if (screen === "etapas") {
+    location.replace(selectedSource ? `/registro?fonte=${encodeURIComponent(selectedSource)}` : "/inicio");
+    return;
+  }
   try {
     user = await api("/api/me");
     document.body.classList.add("signed-in");
@@ -517,11 +530,11 @@ async function init() {
       await post("/api/logout", {});
       location.assign("/inicio");
     };
-    if (selectedSource && ["etapas", "biblioteca", "revisao"].includes(screen)) {
+    if (selectedSource && ["registro", "biblioteca", "revisao"].includes(screen)) {
       await renderSource(selectedSource);
     } else {
       const render = {
-        inicio: renderHome, registro: renderRegister, etapas: renderStages,
+        inicio: renderHome, registro: renderRegister,
         revisao: renderQueue, biblioteca: renderLibrary, consulta: renderChat, receita: renderRecipe,
       };
       await render[screen]();

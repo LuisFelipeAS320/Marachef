@@ -71,9 +71,12 @@ async def protect_browser(request: Request, call_next):
         expected = f"{request.url.scheme}://{request.url.netloc}"
         if (origin and origin != expected) or request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
             return JSONResponse({"detail": "Origem da solicitação inválida."}, status_code=403)
-    if request.url.path in ("/api/upload", "/api/documents"):
+    path = request.url.path
+    limit = {"/api/upload": knowledge.VIDEO_LIMIT, "/api/documents": knowledge.PDF_LIMIT}.get(path)
+    if request.method == "POST" and path.startswith("/api/receitas/") and path.endswith("/foto"):
+        limit = knowledge.PHOTO_LIMIT
+    if limit is not None:
         length = request.headers.get("content-length")
-        limit = knowledge.PDF_LIMIT if request.url.path == "/api/documents" else knowledge.VIDEO_LIMIT
         if length is None or not length.isdecimal():
             return JSONResponse({"detail": "Informe o tamanho do arquivo."}, status_code=411)
         if int(length) > limit + 64 * 1024:
@@ -137,6 +140,24 @@ def published_recipe(db, dish_id):
     if not recipes:
         raise HTTPException(404, "Ainda não há material publicado para este prato.")
     return recipes[0]
+
+
+@app.get("/api/receitas/{dish_id}/foto")
+def get_recipe_photo(dish_id: UUID, user: User):
+    with store.connect() as db:
+        photo = store.recipe_photo(db, dish_id)
+    if not photo:
+        raise HTTPException(404, "Este prato ainda não tem foto.")
+    return Response(photo["cover_photo"], media_type="image/jpeg")
+
+
+@app.post("/api/receitas/{dish_id}/foto", status_code=204)
+def set_recipe_photo(dish_id: UUID, photo: UploadFile, user: User):
+    auth.require(user, auth.REVIEWERS)
+    image = knowledge.prepare_cover_photo(photo.file)
+    with store.connect() as db:
+        published_recipe(db, dish_id)
+        db.execute("UPDATE dishes SET cover_photo = %s WHERE id = %s", (image, dish_id))
 
 
 @app.get("/api/receitas/{dish_id}")

@@ -1,6 +1,8 @@
+import base64
 import io
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from contextlib import nullcontext
@@ -317,6 +319,33 @@ class ApiChecks(unittest.TestCase):
             sufficient=True, answer="Invenção", citations=[Citation(id=1, quote="Uma citação fabricada")],
         )):
             self.assertFalse(self.ask("Como é o creme do Feijão de teste?")["sufficient"])
+
+    @unittest.skipUnless(shutil.which(knowledge.media_tool("ffmpeg")), "FFmpeg não instalado")
+    def test_published_recipe_uses_its_own_photo(self):
+        document = {"document": ("ficha.pdf", test_pdf_bytes(), "application/pdf")}
+        uploaded = self.admin.post("/api/documents", files=document, data={"dish_id": self.dish})
+        source = uploaded.json()["id"]
+        photo_url = f"/api/receitas/{self.dish}/foto"
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5ZkAAAAASUVORK5CYII="
+        )
+        photo = {"photo": ("prato.png", png, "image/png")}
+        self.assertEqual(self.chef.post(photo_url, files=photo).status_code, 404)
+        approved = self.chef.post(f"/api/sources/{source}/review", json={"decision": "aprovar", "version": 1})
+        self.assertEqual(approved.status_code, 200, approved.text)
+        self.assertFalse(self.employee.get("/api/receitas").json()[0]["has_photo"])
+        self.assertEqual(self.employee.get(photo_url).status_code, 404)
+        self.assertEqual(self.employee.post(photo_url, files=photo).status_code, 403)
+        uploaded = self.chef.post(photo_url, files=photo)
+        self.assertEqual(uploaded.status_code, 204, uploaded.text)
+        self.assertTrue(self.employee.get("/api/receitas").json()[0]["has_photo"])
+        saved = self.employee.get(photo_url)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.headers["content-type"], "image/jpeg")
+        self.assertTrue(saved.content.startswith(b"\xff\xd8\xff"))
+        invalid = {"photo": ("prato.png", png[:10], "image/png")}
+        self.assertEqual(self.chef.post(photo_url, files=invalid).status_code, 422)
+        self.assertEqual(self.employee.get(photo_url).content, saved.content)
 
     def test_packaged_demo_seeds_media_without_gemini_and_is_idempotent(self):
         with patch.object(Gemini, "embed", side_effect=AssertionError("A carga local não consulta o Gemini.")):

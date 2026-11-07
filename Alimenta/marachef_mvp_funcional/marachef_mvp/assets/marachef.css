@@ -167,6 +167,7 @@ button:disabled { cursor: wait; opacity: .55; }
 .status { color: var(--green); }
 .prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .compact { max-width: 36rem; }
+.login-card { margin-inline: auto; }
 .records { list-style: none; padding: 0; margin: 0; }
 .records li { border-top: 1px solid var(--border); padding: .8rem 0; }
 .records li:first-child { border-top: 0; }
@@ -253,11 +254,10 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .recipe-cover::after { width: 59%; max-width: 10rem; }
 .recipe-cover-icon { z-index: 1; display: grid; place-items: center; width: 3.5rem; height: 3.5rem; border-radius: 50%; background: #fff9f6b8; }
 .recipe-cover-icon .icon { width: 1.6rem; height: 1.6rem; }
-.recipe-cover video {
-  position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; margin: 0;
-  object-fit: cover; opacity: 0; pointer-events: none; border-radius: 0;
+.recipe-cover img {
+  position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%;
+  object-fit: cover;
 }
-.recipe-cover video.preview-ready { opacity: 1; }
 .recipe-card-body { display: flex; flex: 1; flex-direction: column; align-items: start; padding: .95rem 1rem 1.05rem; }
 .recipe-card-body h2 { margin: .5rem 0 .25rem; font: 650 1.25rem/1.15 Outfit, Inter, sans-serif; overflow-wrap: anywhere; }
 .recipe-card-body p { margin: 0 0 .75rem; color: var(--muted); }
@@ -279,6 +279,8 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .recipe-hero-title p { margin: 0 0 .25rem; font-size: .73rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: #f8dccc; }
 .recipe-hero h1 { margin: 0; }
 .recipe-hero .recipe-tag { color: #fff; background: #793218; border: 1px solid #e2aa8a80; }
+.recipe-photo-edit { margin: .85rem 0; }
+.recipe-photo-edit summary { cursor: pointer; font-weight: 650; }
 .recipe-toolbar { display: flex; justify-content: space-between; align-items: center; gap: .6rem 1rem; flex-wrap: wrap; margin: .85rem 0; }
 .recipe-toolbar p { margin: 0; font-size: .78rem; }
 .recipe-tabs { display: flex; gap: .35rem; flex-wrap: wrap; }
