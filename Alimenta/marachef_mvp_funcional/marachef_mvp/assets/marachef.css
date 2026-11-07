@@ -167,6 +167,7 @@ button:disabled { cursor: wait; opacity: .55; }
 .status { color: var(--green); }
 .prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .compact { max-width: 36rem; }
+.login-card { margin-inline: auto; }
 .records { list-style: none; padding: 0; margin: 0; }
 .records li { border-top: 1px solid var(--border); padding: .8rem 0; }
 .records li:first-child { border-top: 0; }

@@ -69,7 +69,7 @@ function bindForm(id, handler, busyText = "Salvando…") {
 
 function renderLogin() {
   main.innerHTML = `
-    <div class="card compact">
+    <div class="card compact login-card">
       <p class="eyebrow">Cozinha Marambaia</p><h1>Entre na MaraChef</h1>
       <p class="muted">Acesse os preparos e orientações da sua equipe.</p>
       <form id="login"><fieldset>
