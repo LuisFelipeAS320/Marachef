@@ -57,17 +57,21 @@ def analyze_video(ai, source_id, version, user):
             raise HTTPException(422, "Selecione um vídeo para análise.")
         if source["actor"] != user.name and user.role not in REVIEWERS:
             raise HTTPException(403, "Somente o autor ou um revisor pode analisar este vídeo.")
+        locked = db.execute("SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS acquired",
+                            (f"marachef:video:{source_id}",)).fetchone()["acquired"]
+        if not locked:
+            raise HTTPException(409, "Este vídeo já está sendo analisado. Aguarde alguns minutos.")
         store.check_version(db, source_id, version)
-    details = source["details"]
-    analysis = ai.analyze(
-        store.UPLOADS / source["blob"], source["mime"], details | {"prato": source["dish"]},
-        details["duration"],
-    )
-    data = analysis.model_dump()
-    with store.connect() as db:
+        # Mantém o bloqueio da sessão durante o Gemini, sem manter uma transação aberta.
+        db.commit()
+        details = source["details"]
+        analysis = ai.analyze(
+            store.UPLOADS / source["blob"], source["mime"], details | {"prato": source["dish"]},
+            details["duration"], revision=version,
+        )
         store.get_source(db, source_id, lock=True)
         store.check_version(db, source_id, version)
-        return store.append_revision(db, source_id, version + 1, "pendente", data, user.name)
+        return store.append_revision(db, source_id, version + 1, "pendente", analysis.model_dump(), user.name)
 
 
 def review(ai, source_id, payload, user):

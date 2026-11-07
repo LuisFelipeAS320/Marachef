@@ -1,8 +1,11 @@
+import hashlib
 import json
 import logging
 import math
 import os
 import re
+import tempfile
+import textwrap
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,12 +17,17 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field, StringConstraints
 
+from knowledge import cut_for_analysis
+
 EMBEDDING_MODEL = "gemini-embedding-001"
 DIMENSIONS = 768
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 LOG = logging.getLogger(__name__)
 UPSTREAM_ERRORS = (genai.errors.APIError, httpx.HTTPError, ValueError)
 INLINE_VIDEO_LIMIT = 12 * 1024**2
+VIDEO_SEGMENT_SECONDS = 300
+MAX_VIDEO_STAGES = 45
+MAX_VIDEO_CUTS = 30
 VIDEO_CLOCK_FIELDS = {"start", "end", "timestamp"}
 VIDEO_CLOCK_FORMAT = re.compile(r"(\d{2}):([0-5]\d):([0-5]\d(?:\.\d{1,3})?)")
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1800)]
@@ -57,9 +65,13 @@ class VideoAnalysis(BaseModel):
     summary: Text
     ingredients: list[Text] = Field(max_length=60)
     utensils: list[Text] = Field(max_length=60)
-    stages: list[Stage] = Field(min_length=1, max_length=45)
-    cuts: list[Clip] = Field(max_length=30)
+    stages: list[Stage] = Field(min_length=1, max_length=MAX_VIDEO_STAGES)
+    cuts: list[Clip] = Field(max_length=MAX_VIDEO_CUTS)
     unknowns: list[Text] = Field(max_length=25)
+
+
+class VideoSegmentAnalysis(VideoAnalysis):
+    stages: list[Stage] = Field(max_length=MAX_VIDEO_STAGES)
 
 
 class Citation(BaseModel):
@@ -118,7 +130,7 @@ divergências com uma fonte vigente. A orientação deve ter suporte vigente.
 
 def validate_timeline(analysis, duration):
     def inside(start, end):
-        return 0 <= start < end <= duration + 0.05
+        return 0 <= start < min(end, duration) and end <= duration + 0.05
 
     previous = 0
     for stage in analysis.stages:
@@ -163,8 +175,8 @@ def api_schema(node):
     return node
 
 
-def video_api_schema():
-    schema = api_schema(VideoAnalysis.model_json_schema())
+def video_api_schema(model=VideoAnalysis):
+    schema = api_schema(model.model_json_schema())
     clock = {"type": "string", "description": "Tempo desde o início em HH:MM:SS ou HH:MM:SS.sss."}
     for definition in schema["$defs"].values():
         fields = definition["properties"]
@@ -198,6 +210,56 @@ def duration_clock(duration):
     return f"{hours:02}:{minutes:02}:{millis / 1000:06.3f}"
 
 
+def merge_segments(segments, duration):
+    stages, cuts = [], []
+    for offset, length, segment in segments:
+        def interval(item):
+            return {
+                "start": round(offset + item.start, 3),
+                "end": round(offset + min(item.end, length), 3),
+            }
+
+        for stage in segment.stages:
+            comments = [comment.model_copy(update={
+                "timestamp": round(offset + min(comment.timestamp, length), 3)
+                if comment.timestamp is not None else None,
+            }) for comment in stage.comments]
+            stages.append(stage.model_copy(update=interval(stage) | {"comments": comments}))
+        cuts.extend(cut.model_copy(update=interval(cut)) for cut in segment.cuts)
+
+    if not stages:
+        raise HTTPException(422, "O Gemini não identificou etapas de preparo no vídeo.")
+    summaries = " ".join(segment.summary for _, _, segment in segments)
+    lists = {
+        field: list(dict.fromkeys(item for _, _, segment in segments for item in getattr(segment, field)))[:limit]
+        for field, limit in (("ingredients", 60), ("utensils", 60), ("unknowns", 25))
+    }
+    return validate_timeline(VideoAnalysis(
+        summary=textwrap.shorten(summaries, width=1800, placeholder="…"),
+        stages=stages, cuts=cuts, **lists,
+    ), duration)
+
+
+def save_segment(path, segment):
+    descriptor, filename = tempfile.mkstemp(dir=path.parent)
+    temporary = Path(filename)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write(segment.model_dump_json())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def chat_service_error(exc, invalid_response):
+    code = getattr(exc, "code", None)
+    if code in (500, 502, 503, 504) or isinstance(exc, httpx.RequestError):
+        return HTTPException(503, "O Gemini está temporariamente indisponível. Tente perguntar novamente em instantes.")
+    if code == 429:
+        return HTTPException(429, "O Gemini atingiu o limite de uso. Tente novamente quando a cota estiver disponível.")
+    return HTTPException(502, invalid_response)
+
+
 class Gemini:
     def __init__(self):
         self.key = os.getenv("GEMINI_API_KEY")
@@ -229,7 +291,9 @@ class Gemini:
                         raise ValueError("Embeddings incompletos ou inválidos.")
                     vectors.extend(values)
         except UPSTREAM_ERRORS as exc:
-            LOG.warning("Embeddings Gemini falharam (%s).", type(exc).__name__)
+            LOG.warning("Embeddings Gemini falharam (%s, %s).", type(exc).__name__, getattr(exc, "code", None))
+            if query:
+                raise chat_service_error(exc, "O Gemini não conseguiu consultar as referências.") from exc
             raise HTTPException(502, "O Gemini não conseguiu gerar os embeddings.") from exc
         return vectors
 
@@ -237,7 +301,8 @@ class Gemini:
         thinking = None
         if self.model.removeprefix("models/").startswith("gemini-3"):
             thinking = types.ThinkingConfig(thinking_level="low")
-        response_schema = video_api_schema() if schema is VideoAnalysis else api_schema(schema.model_json_schema())
+        is_video = issubclass(schema, VideoAnalysis)
+        response_schema = video_api_schema(schema) if is_video else api_schema(schema.model_json_schema())
         response = client.models.generate_content(
             model=self.model, contents=contents,
             config=types.GenerateContentConfig(
@@ -247,12 +312,13 @@ class Gemini:
                 thinking_config=thinking,
                 http_options=types.HttpOptions(
                     retry_options=types.HttpRetryOptions(
-                        attempts=2, initial_delay=2, max_delay=4, http_status_codes=[500, 502, 503, 504],
+                        attempts=3 if is_video else 2, initial_delay=3, max_delay=12,
+                        http_status_codes=[500, 502, 503, 504],
                     ),
                 ),
             ),
         )
-        if schema is VideoAnalysis:
+        if is_video:
             return schema.model_validate(read_video_clocks(json.loads(response.text or "")))
         return schema.model_validate_json(response.text or "")
 
@@ -263,8 +329,8 @@ class Gemini:
                     client, json.dumps(payload, ensure_ascii=False, default=str), CHAT_TASK, GroundedAnswer,
                 )
         except UPSTREAM_ERRORS as exc:
-            LOG.warning("Resposta Gemini falhou (%s).", type(exc).__name__)
-            raise HTTPException(502, "O Gemini não retornou uma resposta verificável.") from exc
+            LOG.warning("Resposta Gemini falhou (%s, %s).", type(exc).__name__, getattr(exc, "code", None))
+            raise chat_service_error(exc, "O Gemini não retornou uma resposta verificável.") from exc
 
     @contextmanager
     def video_part(self, client, path, mime, duration):
@@ -290,27 +356,82 @@ class Gemini:
                 except Exception as exc:
                     LOG.warning("Exclusão do arquivo no Gemini falhou (%s).", type(exc).__name__)
 
-    def analyze(self, path: Path, mime, metadata, duration):
+    def analyze_clip(self, client, path, mime, metadata, duration, *, segment_count=None):
+        model = VideoAnalysis
+        task = VIDEO_TASK
+        if segment_count:
+            model = VideoSegmentAnalysis
+            stage_limit = MAX_VIDEO_STAGES // segment_count
+            cut_limit = MAX_VIDEO_CUTS // segment_count
+            task += (
+                "\nEste arquivo é um trecho do vídeo original. Todos os timestamps começam do zero neste trecho. "
+                f"Registre até {stage_limit} etapas e {cut_limit} cortes. Use stages=[] se não houver ações de preparo. "
+                "Resuma apenas o que acontece neste trecho. Ignore tempos de legendas externas que indiquem a gravação inteira."
+            )
+        payload = metadata | {
+            "duracao_real_segundos": duration, "duracao_real_no_relogio": duration_clock(duration),
+        }
+        with self.video_part(client, path, mime, duration) as video:
+            for attempt in range(2):
+                details = types.Part.from_text(text=json.dumps(payload, ensure_ascii=False, default=str))
+                try:
+                    result = self.generate(client, [video, details], task, model)
+                    if segment_count and (len(result.stages) > stage_limit or len(result.cuts) > cut_limit):
+                        raise ValueError("O trecho contém etapas ou cortes demais.")
+                    return normalize_model_timeline(result, duration)
+                except ValueError:
+                    if attempt:
+                        raise HTTPException(
+                            502, "O Gemini retornou dados ou timestamps inválidos para o vídeo. Tente novamente.",
+                        ) from None
+                    LOG.info("Repetindo análise de vídeo após resposta inválida do Gemini.")
+                    payload["validacao"] = (
+                        "A resposta anterior falhou na validação. Respeite a quantidade de etapas e cortes, "
+                        "use HH:MM:SS e mantenha todos os intervalos dentro da duração informada."
+                    )
+
+    def analyze_long_video(self, client, path, metadata, duration, revision):
+        count = math.ceil(duration / VIDEO_SEGMENT_SECONDS)
+        cache_key = json.dumps(
+            [1, self.model, path.stat().st_size, path.stat().st_mtime_ns, revision, duration, count, metadata],
+            ensure_ascii=False, sort_keys=True, default=str,
+        )
+        digest = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
+        cache = path.parent.parent / "analysis" / path.stem / digest
+        cache.mkdir(parents=True, exist_ok=True)
+        segments = []
+        with tempfile.TemporaryDirectory(dir=cache) as directory:
+            for index in range(count):
+                offset = round(duration * index / count, 3)
+                length = round(duration * (index + 1) / count - offset, 3)
+                checkpoint = cache / f"{index}.json"
+                try:
+                    result = validate_timeline(VideoSegmentAnalysis.model_validate_json(checkpoint.read_bytes()), length)
+                except (FileNotFoundError, ValueError):
+                    clip = Path(directory) / f"trecho-{index + 1}.mp4"
+                    LOG.info("Analisando trecho %d/%d do vídeo %s.", index + 1, count, path.stem)
+                    cut_for_analysis(path, clip, offset, length)
+                    result = self.analyze_clip(client, clip, "video/mp4", metadata, length, segment_count=count)
+                    save_segment(checkpoint, result)
+                    clip.unlink()
+                segments.append((offset, length, result))
+        return merge_segments(segments, duration)
+
+    def analyze(self, path: Path, mime, metadata, duration, *, revision=0):
         try:
-            with self.client() as client, self.video_part(client, path, mime, duration) as video:
-                payload = metadata | {
-                    "duracao_real_segundos": duration, "duracao_real_no_relogio": duration_clock(duration),
-                }
-                for attempt in range(2):
-                    details = types.Part.from_text(text=json.dumps(payload, ensure_ascii=False, default=str))
-                    try:
-                        analysis = self.generate(client, [video, details], VIDEO_TASK, VideoAnalysis)
-                        return normalize_model_timeline(analysis, duration)
-                    except ValueError:
-                        if attempt:
-                            raise HTTPException(
-                                502, "O Gemini retornou dados ou timestamps inválidos para o vídeo. Tente novamente.",
-                            ) from None
-                        LOG.info("Repetindo análise de vídeo após resposta inválida do Gemini.")
-                        payload["validacao"] = (
-                            "A resposta anterior falhou na validação. Confira todos os campos e os limites de "
-                            "etapas, falas e cortes no formato HH:MM:SS. Nenhum intervalo pode ultrapassar a duração real."
-                        )
+            with self.client() as client:
+                if duration > VIDEO_SEGMENT_SECONDS:
+                    return self.analyze_long_video(client, path, metadata, duration, revision)
+                return self.analyze_clip(client, path, mime, metadata, duration)
         except UPSTREAM_ERRORS as exc:
-            LOG.warning("Análise Gemini falhou (%s, %s).", type(exc).__name__, getattr(exc, "code", None))
+            code = getattr(exc, "code", None)
+            LOG.warning("Análise Gemini falhou (%s, %s).", type(exc).__name__, code)
+            if code in (500, 502, 503, 504) or isinstance(exc, httpx.RequestError):
+                raise HTTPException(
+                    503, "O Gemini está temporariamente indisponível. O vídeo já foi salvo. Tente analisar novamente.",
+                ) from exc
+            if code == 429:
+                raise HTTPException(
+                    429, "O Gemini atingiu o limite de uso. O vídeo já foi salvo. Tente novamente quando a cota estiver disponível.",
+                ) from exc
             raise HTTPException(502, "O Gemini não retornou uma análise de vídeo válida.") from exc

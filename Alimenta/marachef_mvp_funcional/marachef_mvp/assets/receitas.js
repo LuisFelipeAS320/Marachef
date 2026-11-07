@@ -65,7 +65,7 @@ function recipeDocuments(documents, openFirst = false) {
   if (!documents.length) return `<p class="muted">As etapas e orientações deste prato estão no vídeo.</p>`;
   return documents.map((document, index) => `
     <div class="recipe-document">
-      <h3>${escapeHtml(document.title)}</h3>
+      <h3>${escapeHtml(sourceTitle(document))}</h3>
       ${recipePdfLink(document)}
       <details ${openFirst && index === 0 ? "open" : ""}><summary>Ler trechos deste prato</summary>
         ${document.chunks.map(chunk => `<p class="recipe-excerpt"><small>Página ${chunk.page}</small>
@@ -135,7 +135,7 @@ async function renderRecipe() {
         <div id="recipe-preparo" data-recipe-panel>
           ${videos.length ? `<section class="card recipe-player">
             ${videos.length > 1 ? `<label>Vídeo do preparo <select id="recipe-recording">
-              ${videos.map((video, index) => `<option value="${index}">${escapeHtml(video.title)}</option>`).join("")}
+              ${videos.map((video, index) => `<option value="${index}">Gravação ${index + 1} · ${formatTime(video.duration)}${video.cook ? ` · ${escapeHtml(video.cook)}` : ""}</option>`).join("")}
             </select></label>` : ""}
             <h2 class="section-label" id="recipe-player-title">Vídeo da etapa selecionada</h2>
             <video id="recipe-player" controls playsinline preload="metadata"></video>

@@ -50,6 +50,13 @@ def normalized(text):
                                .encode("ascii", "ignore").decode()))
 
 
+def documented_ingredients(items):
+    unique = {}
+    for item in items:
+        unique.setdefault(normalized(item), item)
+    return list(unique.values())
+
+
 def filename(value):
     return Path((value or "").replace("\\", "/")).name[:240]
 
@@ -121,6 +128,24 @@ def normalize_mkv(path, duration):
             raise HTTPException(503, "Instale o FFmpeg no servidor ou envie um MP4.") from exc
         raise HTTPException(422, "Não foi possível converter o vídeo MKV para MP4.") from exc
     return converted
+
+
+def cut_for_analysis(path, target, start, duration):
+    try:
+        subprocess.run(
+            [media_tool("ffmpeg"), "-nostdin", "-v", "error", "-protocol_whitelist", "file",
+             "-ss", str(start), "-i", str(path), "-t", str(duration), "-map", "0:V:0", "-map", "0:a:0?",
+             "-vf", "fps=12,scale='min(960,iw)':-2", "-c:v", "libx264", "-preset", "veryfast",
+             "-crf", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "80k",
+             "-movflags", "+faststart", str(target)],
+            capture_output=True, check=True, timeout=180,
+        )
+        if abs(video_duration(target, "mov") - duration) > 0.5:
+            raise HTTPException(422, "Um trecho do vídeo não preservou a duração original.")
+    except FileNotFoundError as exc:
+        raise HTTPException(503, "Instale o FFmpeg no servidor para analisar vídeos longos.") from exc
+    except subprocess.SubprocessError as exc:
+        raise HTTPException(422, "Não foi possível preparar um trecho do vídeo para análise.") from exc
 
 
 def extract_pages(path):

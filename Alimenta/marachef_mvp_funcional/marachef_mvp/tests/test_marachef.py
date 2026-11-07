@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
+from google.genai.errors import ServerError
 from pypdf import PdfWriter
 
 import auth
@@ -17,7 +19,8 @@ import manage
 import store
 from app import app
 from gemini import (
-    Citation, Gemini, GroundedAnswer, VideoAnalysis, api_schema, normalize_model_timeline, validate_timeline,
+    Citation, Gemini, GroundedAnswer, VideoAnalysis, VideoSegmentAnalysis, api_schema, normalize_model_timeline,
+    validate_timeline,
 )
 
 
@@ -90,6 +93,43 @@ class LocalChecks(unittest.TestCase):
         self.assertEqual(initial["duracao_real_no_relogio"], "00:00:10.000")
         self.assertIn("validacao", retry)
 
+    def test_long_video_resumes_after_transient_failure_and_offsets_timestamps(self):
+        ai = Gemini()
+        piece = VideoSegmentAnalysis.model_validate(analysis().model_dump())
+        with tempfile.TemporaryDirectory(dir=store.ROOT) as directory:
+            path = Path(directory) / "uploads" / "original.mp4"
+            path.parent.mkdir()
+            path.write_bytes(b"fixture")
+            with (
+                patch.object(ai, "client", return_value=nullcontext(object())),
+                patch("gemini.cut_for_analysis", side_effect=lambda _source, target, *_: target.touch()) as cut,
+                patch.object(ai, "analyze_clip", side_effect=[
+                    piece, ServerError(503, {"error": {"message": "temporariamente indisponível"}}), piece,
+                ]) as analyze_clip,
+            ):
+                with self.assertRaises(HTTPException) as error:
+                    ai.analyze(path, "video/mp4", {}, 600)
+                self.assertEqual(error.exception.status_code, 503)
+                self.assertIn("já foi salvo", error.exception.detail)
+                result = ai.analyze(path, "video/mp4", {}, 600)
+            self.assertEqual([call.args[2] for call in cut.call_args_list], [0, 300, 300])
+            self.assertEqual(analyze_clip.call_count, 3)
+            self.assertEqual([stage.start for stage in result.stages], [1, 301])
+            self.assertEqual([stage.comments[0].timestamp for stage in result.stages], [3, 303])
+            self.assertEqual([item.start for item in result.cuts], [1, 301])
+            self.assertEqual(result.ingredients, ["feijão"])
+
+    def test_chat_reports_gemini_unavailable(self):
+        ai = Gemini()
+        with (
+            patch.object(ai, "client", return_value=nullcontext(object())),
+            patch.object(ai, "generate", side_effect=ServerError(503, {"error": {"message": "unavailable"}})),
+            self.assertRaises(HTTPException) as error,
+        ):
+            ai.answer({})
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertIn("temporariamente indisponível", error.exception.detail)
+
     def test_gemini_video_clock_converts_minutes_to_seconds(self):
         data = analysis().model_dump()
         stage = data["stages"][0]
@@ -145,7 +185,7 @@ class GeminiDouble:
     def embed(self, texts, *, query=False):
         return [[1.0] + [0.0] * 767 for _ in texts]
 
-    def analyze(self, *_args):
+    def analyze(self, *_args, **_kwargs):
         return analysis()
 
     def answer(self, payload):
@@ -301,6 +341,10 @@ class ApiChecks(unittest.TestCase):
         self.assertEqual(upload.status_code, 201, upload.text)
         source = upload.json()["id"]
         path = f"/api/sources/{source}"
+        with store.connect() as db:
+            db.execute("SELECT pg_advisory_lock(hashtextextended(%s, 0))", (f"marachef:video:{source}",))
+            duplicate = self.employee.post("/api/analyze", json={"id": source, "version": 0})
+            self.assertEqual(duplicate.status_code, 409)
         draft = self.employee.post("/api/analyze", json={"id": source, "version": 0})
         self.assertEqual(draft.status_code, 200, draft.text)
         self.assertEqual(draft.json()["status"], "pendente")
@@ -309,6 +353,15 @@ class ApiChecks(unittest.TestCase):
         self.assertFalse(self.ask("Como é o creme do Feijão de teste?")["sufficient"])
         result = self.chef.post(path + "/review", json={"version": 1, "decision": "aprovar"})
         self.assertEqual(result.status_code, 200, result.text)
+        with patch.object(self.ai, "embed", side_effect=AssertionError("A lista aprovada não depende do Gemini.")):
+            ingredients = self.employee.post(f"/api/receitas/{self.dish}/perguntar", json={
+                "question": "Quais são os ingredientes?",
+            })
+        self.assertEqual(ingredients.status_code, 200, ingredients.text)
+        reply = ingredients.json()
+        self.assertIn("• feijão", reply["answer"])
+        self.assertEqual(reply["sources"][0]["url"], f"/midia/{source}")
+        self.assertEqual(reply["sources"][0]["version"], 2)
         self.assertEqual(self.ask("Como é o creme do Feijão de teste?")["sources"][0]["start"], 1)
         clip = self.employee.get(f"/midia/{source}", headers={"Range": "bytes=0-2"})
         self.assertEqual(clip.status_code, 206)

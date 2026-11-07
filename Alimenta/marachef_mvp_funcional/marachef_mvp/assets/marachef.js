@@ -22,6 +22,9 @@ const options = (items, placeholder) =>
 const formatTime = seconds => new Date(Math.floor(seconds * 1000)).toISOString().slice(11, 19);
 const formatDate = value => new Date(value).toLocaleString("pt-BR");
 const icon = name => `<svg class="icon" aria-hidden="true"><use href="#icon-${name}"/></svg>`;
+const sourceTitle = source => /\.(mp4|mov|webm|mkv|pdf)$/i.test(source.title)
+  ? ({video: "Vídeo do preparo", documento: "Ficha técnica", comentario: "Observação"})[source.kind]
+  : source.title;
 
 async function api(path, options) {
   const response = await fetch(path, options);
@@ -112,18 +115,24 @@ async function renderHome() {
 
 async function renderRegister() {
   const dishes = await api("/api/dishes");
-  const dishSelect = `<label>Nome do prato ou base <select name="dish_id" required>${options(dishes, "Selecione o prato")}</select></label>`;
+  const dishOptions = options(dishes, "Selecione o prato");
   main.innerHTML = `<header class="page-heading register-heading">
       <div><p class="eyebrow">Registro &amp; preservação técnica</p>
         <h1>Registrar um novo preparo</h1>
         <p class="muted">Transforme uma gravação completa em conhecimento organizado para sua equipe.</p></div>
       <ol class="process"><li aria-current="step">01. Enviar gravação</li><li>02. Analisar preparo</li><li>03. Revisar etapas</li></ol>
     </header>
-    ${!dishes.length ? "<p>Cadastre um prato antes do envio. Se necessário, peça ajuda ao chef.</p>" : ""}
+    ${!dishes.length && !reviewer() ? "<p>Peça ao chef para adicionar um prato antes do envio.</p>" : ""}
     <form id="video-upload"><fieldset class="register-grid">
       <section class="card">
         <h2 class="panel-heading">${icon("file")} Identificação da receita</h2>
-          ${dishSelect}
+          <div class="dish-picker">
+            <div class="dish-picker-heading">
+              <label for="video-dish">Nome do prato ou base</label>
+              ${reviewer() ? '<button type="button" id="add-dish" class="secondary">+ Adicionar prato</button>' : ""}
+            </div>
+            <select id="video-dish" name="dish_id" required>${dishOptions}</select>
+          </div>
           <label>Responsável pelo preparo <input name="cook" maxlength="150" required></label>
           <label>Observações opcionais <textarea name="observations" maxlength="6000"></textarea></label>
           <details><summary>Legendas ou transcrição</summary>
@@ -149,24 +158,46 @@ async function renderRegister() {
         <p role="status"></p>
       </div>
     </fieldset></form>
-    ${reviewer() ? `<div class="columns register-tools">
-        ${user.role === "administrador" ? `<section class="card"><h2>Ficha técnica em PDF</h2>
-          <p>Envie um PDF com texto de um prato. A ficha vai para validação.</p>
-          <form id="pdf-upload"><fieldset>${dishSelect}
-            <label>PDF <input type="file" name="document" accept=".pdf" required></label>
-            <button>Enviar PDF</button>
-          </fieldset><p role="status"></p></form></section>` : ""}
-        ${reviewer() ? `<section class="card"><h2>Cadastrar prato</h2>
-          <form id="dish-create"><fieldset>
+    ${user.role === "administrador" ? `<section class="card compact"><h2>Ficha técnica em PDF</h2>
+      <p>Envie um PDF com texto de um prato. A ficha vai para validação.</p>
+      <form id="pdf-upload"><fieldset>
+        <label>Nome do prato ou base <select name="dish_id" required>${dishOptions}</select></label>
+        <label>PDF <input type="file" name="document" accept=".pdf" required></label>
+        <button>Enviar PDF</button>
+      </fieldset><p role="status"></p></form></section>` : ""}
+    ${reviewer() ? `<dialog id="dish-dialog" class="card" aria-labelledby="dish-dialog-title">
+        <h2 id="dish-dialog-title">Adicionar prato</h2>
+        <form id="dish-create"><fieldset>
             <label>Nome <input name="name" maxlength="150" required></label>
             <label>Outros nomes <input name="aliases" placeholder="Separe por vírgulas"></label>
-            <button>Cadastrar prato</button>
-          </fieldset><p role="status"></p></form></section>` : ""}
-    </div>` : ""}`;
-  bindForm("dish-create", async fields => {
-    await post("/api/dishes", {name: fields.get("name"), aliases: fields.get("aliases").split(",").map(s => s.trim()).filter(Boolean)});
-    await renderRegister();
-  });
+            <div class="actions">
+              <button>Adicionar</button>
+              <button type="button" id="cancel-dish" class="secondary">Cancelar</button>
+            </div>
+        </fieldset><p role="status"></p></form></dialog>` : ""}`;
+  if (reviewer()) {
+    const dialog = document.getElementById("dish-dialog");
+    const select = document.getElementById("video-dish");
+    document.getElementById("add-dish").onclick = () => dialog.showModal();
+    document.getElementById("cancel-dish").onclick = () => dialog.close();
+    bindForm("dish-create", async (fields, report) => {
+      const dish = await post("/api/dishes", {
+        name: fields.get("name"),
+        aliases: fields.get("aliases").split(",").map(value => value.trim()).filter(Boolean),
+      });
+      dishes.push(dish);
+      dishes.sort((first, second) => first.name.localeCompare(second.name, "pt-BR"));
+      main.querySelectorAll('select[name="dish_id"]').forEach(input => {
+        const previous = input.value;
+        input.innerHTML = options(dishes, "Selecione o prato");
+        input.value = input === select ? dish.id : previous;
+      });
+      document.getElementById("dish-create").reset();
+      status(report, "");
+      dialog.close();
+      select.focus();
+    });
+  }
   bindForm("video-upload", async fields => {
     const video = fields.get("video");
     if (!video?.size || !/\.(mp4|mov|webm|mkv)$/i.test(video.name)) {
@@ -189,24 +220,32 @@ function sourceList(items, route, empty) {
   return `<ul class="records source-records">${items.map(item => {
     const url = `/${route}?fonte=${escapeHtml(item.id)}`;
     const typeIcon = item.kind === "video" ? "video" : item.kind === "comentario" ? "chat" : "file";
+    const action = item.status === "pendente" && reviewer() ? "Validar" : "Ver detalhes";
     return `<li>
       <span class="source-icon">${icon(typeIcon)}</span>
       <div class="source-description">
-        <a class="source-title" href="${url}"><strong>${escapeHtml(item.dish || item.title)}</strong></a>
-        <small class="muted">${escapeHtml(item.title)} · ${formatDate(item.created_at)}</small>
+        <a class="source-title" href="${url}"><strong>${escapeHtml(item.dish || sourceTitle(item))}</strong></a>
+        <small class="muted">${formatDate(item.created_at)}</small>
       </div>
       <span class="badge ${escapeHtml(item.status || "novo")}">${labels[item.status] ?? "Aguardando análise"}</span>
-      <a class="text-link" href="${url}">Ver detalhes ${icon("arrow")}</a>
+      <a class="text-link" href="${url}">${action} ${icon("arrow")}</a>
     </li>`;
   }).join("")}</ul>`;
 }
 
 async function renderStages() {
   const items = await api("/api/sources");
-  main.innerHTML = `<header class="page-heading"><p class="eyebrow">Mapeamento temporal</p>
-    <h1>Etapas Geradas</h1><p class="muted">Abra uma gravação para analisar ou conferir as etapas do preparo.</p></header>
-    <section class="card">${sourceList(items.filter(item => item.kind === "video"),
-      "etapas", "Nenhum vídeo disponível para análise.")}</section>`;
+  const videos = items.filter(item => item.kind === "video");
+  const sheets = items.filter(item => item.kind === "documento" && item.scope === "oficial");
+  main.innerHTML = `<header class="page-heading"><h1>Etapas Geradas</h1></header>
+    <section class="card" aria-labelledby="stage-videos">
+      <h2 id="stage-videos" class="panel-heading">Vídeos de preparo</h2>
+      ${sourceList(videos, "etapas", "Nenhum vídeo registrado.")}
+    </section>
+    <section class="card" aria-labelledby="stage-sheets">
+      <h2 id="stage-sheets" class="panel-heading">Fichas técnicas</h2>
+      ${sourceList(sheets, "etapas", "Nenhuma ficha técnica disponível.")}
+    </section>`;
 }
 
 async function renderQueue() {
@@ -309,14 +348,14 @@ async function renderSource(id) {
   const revision = screen === "biblioteca" ? active ?? draft : draft;
   const editable = reviewer() && screen !== "biblioteca" && revision?.status === "pendente";
   const video = source.kind === "video";
-  const heading = video && screen === "etapas" && revision ? "Seu preparo foi organizado." : source.dish || source.title;
-  const metadata = [...new Set([source.dish, source.title, source.details.cook, labels[revision?.status]])]
+  const heading = video && screen === "etapas" && revision ? "Seu preparo foi organizado." : source.dish || sourceTitle(source);
+  const metadata = [...new Set([source.dish, source.details.cook, labels[revision?.status]])]
     .filter(item => item && item !== heading);
   main.innerHTML = `<header class="page-heading"><p class="eyebrow">${labels[source.kind]} · ${labels[source.scope]}</p>
     <h1>${escapeHtml(heading)}</h1>
     <p class="muted">${escapeHtml(metadata.join(" · "))}</p></header>
     ${source.scope === "demo" ? "<p>Receita de demonstração aprovada para testes técnicos.</p>" : ""}
-    ${parent ? `<p><a href="/biblioteca?fonte=${parent.id}">${escapeHtml(parent.title)}</a> · versão ${parent.version}</p>` : ""}
+    ${parent ? `<p><a href="/biblioteca?fonte=${parent.id}">Vídeo do preparo</a> · versão ${parent.version}</p>` : ""}
     <div class="${video ? "detail-grid" : ""}">
     ${video ? `<section class="card video-panel"><h2 class="panel-heading">${icon("video")} Gravação do preparo</h2>
       <video id="player" controls preload="metadata" src="${media}"></video>
@@ -355,7 +394,7 @@ async function renderSource(id) {
   bindForm("analyze", async () => {
     await post("/api/analyze", {id, version: draft?.version ?? 0});
     await renderSource(id);
-  }, "O Gemini está processando imagem e áudio. Esta etapa pode levar alguns minutos…");
+  }, "O Gemini está processando imagem e áudio. Vídeos longos são analisados em trechos e podem levar alguns minutos…");
   if (editable) bindForm("review", async fields => {
     const payload = {version: revision.version, decision: fields.get("decision")};
     if (fields.get("note").trim()) payload.note = fields.get("note");
@@ -399,7 +438,7 @@ function renderReferences(sources) {
   if (!sources.length) return "";
   return `<ul>${sources.map(source => {
     const location = source.page ? ` · pág. ${source.page}` : source.start === null ? "" : ` · ${formatTime(source.start)}`;
-    const title = escapeHtml(source.title + location);
+    const title = escapeHtml(sourceTitle(source) + location);
     const link = source.url ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener">${title}</a>` : title;
     return `<li class="ref">${link} · v${source.version}${source.historical ? " · versão substituída" : ""}${source.quote ? `<q>${escapeHtml(source.quote)}</q>` : ""}</li>`;
   }).join("")}</ul>`;

@@ -149,7 +149,7 @@ def recipe_detail(dish_id: UUID, user: User):
         data = material.pop("data")
         material["url"] = f"/midia/{material['id']}"
         if material["kind"] == "video":
-            material["ingredients"] = data["ingredients"]
+            material["ingredients"] = knowledge.documented_ingredients(data["ingredients"])
             material["stages"] = [
                 {key: stage[key] for key in ("title", "start", "end", "action", "visual", "landmark")}
                 for stage in data["stages"]

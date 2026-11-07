@@ -1,7 +1,7 @@
 import re
 
 import store
-from knowledge import normalized
+from knowledge import documented_ingredients, normalized
 
 NO_EVIDENCE = "Não encontrei uma orientação documentada para esta pergunta. Consulte o chef responsável."
 NO_OFFICIAL = "Não encontrei orientação oficial para esta pergunta na base do Marambaia."
@@ -10,6 +10,10 @@ SCOPE_LABELS = {
     "demo": "Receitas de demonstração · aprovadas para testes técnicos",
     "institucional": "Estudo de caso institucional",
 }
+INGREDIENT_QUESTION = re.compile(
+    r"(?:quais (?:sao )?(?:os )?|list[ea] (?:os )?|me diga (?:os )?)?ingredientes"
+    r"(?: d(?:o|este) prato| d(?:a|esta) receita| do preparo)?"
+)
 
 
 def reference(row, scope):
@@ -81,6 +85,19 @@ def respond(ai, question, scope, selected_dish=None, *, fixed_dish=False):
             return result("Qual prato você quer consultar? Informe o nome ou selecione na lista.")
 
     dish_id = dish["id"] if dish else None
+    if fixed_dish and dish and INGREDIENT_QUESTION.fullmatch(key):
+        with store.connect() as db:
+            materials = store.recipe_materials(db, dish_id, scope)
+        if len(materials) == 1 and materials[0]["kind"] == "video":
+            video = materials[0]
+            ingredients = documented_ingredients(video["data"]["ingredients"])
+            if ingredients:
+                answer = ("Ingredientes identificados ao longo da gravação:\n"
+                          + "\n".join(f"• {item}" for item in ingredients)
+                          + "\n\nConfira as etapas do preparo escolhido para ver quais se aplicam.")
+                source = reference(video | {"source_id": video["id"]}, scope)
+                return result(answer, sources=[source], dish_id=dish_id, sufficient=True)
+
     vector = ai.embed([question], query=True)[0]
     with store.connect() as db:
         rows = store.retrieve(db, scope=scope, dish_id=dish_id, query=question, vector=vector)
