@@ -54,7 +54,7 @@ A base **Demonstração** contém receitas aprovadas para testes técnicos. **Es
 ## Fluxo de trabalho
 
 1. Em **Registrar preparo**, cadastre o prato ou escolha um já existente. Chef e administrador podem cadastrar pratos. O administrador pode enviar um PDF de até 25 MB, com texto extraível e referente a um prato.
-2. Qualquer perfil autenticado pode registrar um vídeo de até 200 MB e 60 minutos. Informe o cozinheiro e, se houver, acrescente observações e legendas. Envie o vídeo e selecione **Analisar vídeo com Gemini**.
+2. Qualquer perfil autenticado pode registrar um vídeo de até 200 MB e 60 minutos. Informe o cozinheiro e, se houver, acrescente observações e legendas. O envio inicia automaticamente a análise com o Gemini. Se precisar tentar novamente, abra o vídeo em **Preparos recentes**, no **Início**.
 3. A análise separa observações visuais, declarações do chef e inferências. Abra uma etapa para assistir a partir do timestamp e conferir o ponto de referência, o tempo, a temperatura ou a fala associada.
 4. Em **Validações**, chef e administrador podem corrigir o rascunho, salvá-lo, aprová-lo ou rejeitá-lo. A análise pode ser solicitada novamente. Cada decisão cria uma versão com autor e data. A aprovação grava os trechos e seus vetores em uma transação.
 5. A equipe pode comentar um vídeo aprovado ou uma etapa específica. O chef pode corrigir, aprovar ou rejeitar a observação. Comentários só entram nas consultas quando aprovados e vinculados à versão vigente do vídeo.
